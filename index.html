@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ATM Finite State Machine (DFA) Visualizer & Simulator</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['Fira Code', 'monospace'],
+          },
+          colors: {
+            atm: {
+              bg: '#0f172a',
+              panel: '#1e293b',
+              screen: '#0284c7',
+              screenBg: '#082f49',
+              green: '#10b981',
+              red: '#ef4444',
+              yellow: '#f59e0b',
+              accent: '#38bdf8'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom scrollbars and pulse effects */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 3px;
+    }
+    .screen-glow {
+      box-shadow: inset 0 0 15px rgba(56, 189, 248, 0.2), 0 0 20px rgba(2, 132, 199, 0.3);
+    }
+    .node-transition {
+      transition: all 0.3s ease;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.1); opacity: 0.4; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .active-node-ring {
+      animation: pulse-ring 2s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen flex flex-col justify-between overflow-x-hidden">
+
+  <!-- Header -->
+  <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-wrap items-center justify-between shadow-lg">
+    <div class="flex items-center space-x-3">
+      <div class="bg-sky-500 text-slate-950 p-2 rounded-lg font-bold">
+        <i class="fa-solid me-1 fa-network-wired"></i> DFA
+      </div>
+      <div>
+        <h1 class="text-xl font-bold tracking-tight text-slate-100">ATM Finite State Machine Visualizer</h1>
+        <p class="text-xs text-sky-400">Formal Automata Model & Interactive Hardware Simulator</p>
+      </div>
+    </div>
+    <div class="flex items-center space-x-3 text-xs">
+      <span class="px-3 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+        Alphabet $\Sigma$ = { C, P, F, W, D, B, E, R }
+      </span>
+      <button id="reset-all-btn" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-md border border-slate-700 transition flex items-center space-x-1">
+        <i class="fa-solid fa-rotate-left"></i> <span>Reset Machine</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 lg:p-6">
+    
+    <!-- LEFT PANEL: FSM Node Graph & Visualizer (7 Columns) -->
+    <section class="lg:col-span-7 flex flex-col space-y-4">
+      
+      <!-- Graph Canvas Card -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col shadow-md relative overflow-hidden flex-1 min-h-[420px]">
+        <div class="flex items-center justify-between mb-2 z-10">
+          <div class="flex items-center space-x-2">
+            <i class="fa-solid fa-diagram-project text-sky-400"></i>
+            <h2 class="font-semibold text-slate-200 text-sm">State Transition Graph (DFA)</h2>
+          </div>
+          <div class="flex space-x-4 text-xs">
+            <span class="flex items-center space-x-1"><span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span> <span>Current State</span></span>
+            <span class="flex items-center space-x-1"><span class="w-3 h-3 rounded-full border-2 border-emerald-400 bg-transparent inline-block"></span> <span>Accepting State</span></span>
+            <span class="flex items-center space-x-1"><span class="w-3 h-3 rounded-full bg-red-900 inline-block"></span> <span>Trap State</span></span>
+          </div>
+        </div>
+
+        <!-- SVG State Diagram -->
+        <div class="relative w-full flex-1 border border-slate-800/80 rounded-lg bg-slate-950/70 overflow-hidden" id="diagram-container">
+          <svg id="dfa-svg" class="w-full h-full min-h-[380px]" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid meet">
+            <!-- Arrow Marker Definitions -->
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="22" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b" />
+              </marker>
+              <marker id="arrow-active" viewBox="0 0 10 10" refX="22" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#38bdf8" />
+              </marker>
+              <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="4" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+            </defs>
+
+            <!-- Transitions / Edge Lines -->
+            <g id="svg-edges">
+              <!-- S0 -> S1 (C) -->
+              <path id="edge-S0-S1" d="M 120 220 L 250 220" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)" fill="none" />
+              <text x="185" y="210" fill="#94a3b8" class="text-xs font-mono" text-anchor="middle">C (Card)</text>
+
+              <!-- S1 -> S2 (P) -->
+              <path id="edge-S1-S2" d="M 310 220 L 440 220" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)" fill="none" />
+              <text x="375" y="210" fill="#94a3b8" class="text-xs font-mono" text-anchor="middle">P (Valid PIN)</text>
+
+              <!-- S1 -> S6 (F - Failed 3x) -->
+              <path id="edge-S1-S6" d="M 270 250 L 150 380" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)" fill="none" />
+              <text x="190" y="325" fill="#f87171" class="text-xs font-mono" text-anchor="middle">F (3 Bad PINs)</text>
+
+              <!-- S1 -> S5 (E - Cancel/Eject) -->
+              <path id="edge-S1-S5" d="M 275 190 Q 350 110 470 100" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)" fill="none" />
+              <text x="360" y="115" fill="#94a3b8" class="text-xs font-mono" text-anchor="middle">E (Eject)</text>
+
+              <!-- S2 -> S3 (W, D, B - Select Transaction) -->
+              <path id="edge-S2-S3" d="M 500 220 L 630 220" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)" fill="none" />
+              <text x="565" y="210" fill="#94a3b8" class="text-xs font-mono" text-anchor="middle">W, D, B</text>
+
+              <!-- S2 -> S5 (E - Exit) -->
+              <path id="edge-S2-S5" d="M 480 190 L 480 130" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)" fill="none" />
+              <text x="495" y="165" fill="#94a3b8" class="text-xs font-mono" text-anchor="middle">E</text>
+
+              <!-- S3 -> S4 (Process Transaction) -->
+              <path id="edge-S3-S4" d="M 660 250 L 590 370" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)" fill="none" />
+              <text x="645" y="315" fill="#94a3b8" class="text-xs font-mono" text-anchor="middle">Finish / Dispense</text>
+
+              <!-- S4 -> S2 (R - Return to options) -->
+              <path id="edge-S4-S2" d="M 550 370 L 485 245" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)" fill="none" />
+              <text x="500" y="310" fill="#94a3b8" class="text-xs font-mono" text-anchor="middle">R (Another)</text>
+
+              <!-- S4 -> S5 (E - Done / Eject) -->
+              <path id="edge-S4-S5" d="M 545 390 L 505 130" stroke="#64748b" stroke-dasharray="4" stroke-width="2" marker-end="url(#arrow)" fill="none" />
+              <text x="515" y="260" fill="#94a3b8" class="text-xs font-mono" text-anchor="middle">E (Exit)</text>
+
+              <!-- S5 -> S0 (Auto Return after eject) -->
+              <path id="edge-S5-S0" d="M 450 100 Q 250 80 120 190" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)" fill="none" />
+              <text x="270" y="80" fill="#94a3b8" class="text-xs font-mono" text-anchor="middle">Auto / Reset</text>
+            </defs>
+
+            <!-- States (Nodes) -->
+            <g id="svg-nodes">
+              <!-- S0: IDLE -->
+              <g id="node-S0" transform="translate(100, 220)">
+                <circle r="30" fill="#1e293b" stroke="#475569" stroke-width="3" id="circle-S0" />
+                <!-- Start Arrow -->
+                <path d="M -55 0 L -33 0" stroke="#38bdf8" stroke-width="3" marker-end="url(#arrow-active)" />
+                <text y="4" text-anchor="middle" fill="#f8fafc" class="font-bold text-xs font-mono">S0</text>
+                <text y="48" text-anchor="middle" fill="#94a3b8" class="text-[11px] font-semibold">IDLE</text>
+              </g>
+
+              <!-- S1: CARD_INSERTED -->
+              <g id="node-S1" transform="translate(280, 220)">
+                <circle r="30" fill="#1e293b" stroke="#475569" stroke-width="3" id="circle-S1" />
+                <text y="4" text-anchor="middle" fill="#f8fafc" class="font-bold text-xs font-mono">S1</text>
+                <text y="48" text-anchor="middle" fill="#94a3b8" class="text-[11px] font-semibold">CARD INS.</text>
+              </g>
+
+              <!-- S2: PIN_VERIFIED -->
+              <g id="node-S2" transform="translate(470, 220)">
+                <circle r="30" fill="#1e293b" stroke="#475569" stroke-width="3" id="circle-S2" />
+                <text y="4" text-anchor="middle" fill="#f8fafc" class="font-bold text-xs font-mono">S2</text>
+                <text y="48" text-anchor="middle" fill="#94a3b8" class="text-[11px] font-semibold">PIN VERIFIED</text>
+              </g>
+
+              <!-- S3: TX_SELECTED -->
+              <g id="node-S3" transform="translate(660, 220)">
+                <circle r="30" fill="#1e293b" stroke="#475569" stroke-width="3" id="circle-S3" />
+                <text y="4" text-anchor="middle" fill="#f8fafc" class="font-bold text-xs font-mono">S3</text>
+                <text y="48" text-anchor="middle" fill="#94a3b8" class="text-[11px] font-semibold">TX SELECT</text>
+              </g>
+
+              <!-- S4: DISPENSING / PROCESS -->
+              <g id="node-S4" transform="translate(570, 390)">
+                <circle r="30" fill="#1e293b" stroke="#475569" stroke-width="3" id="circle-S4" />
+                <text y="4" text-anchor="middle" fill="#f8fafc" class="font-bold text-xs font-mono">S4</text>
+                <text y="48" text-anchor="middle" fill="#94a3b8" class="text-[11px] font-semibold">PROCESSING</text>
+              </g>
+
+              <!-- S5: EJECT / SUCCESS (ACCEPT STATE - Double Circle) -->
+              <g id="node-S5" transform="translate(480, 100)">
+                <circle r="32" fill="#1e293b" stroke="#10b981" stroke-width="2" />
+                <circle r="26" fill="#1e293b" stroke="#10b981" stroke-width="3" id="circle-S5" />
+                <text y="4" text-anchor="middle" fill="#10b981" class="font-bold text-xs font-mono">S5</text>
+                <text y="-42" text-anchor="middle" fill="#10b981" class="text-[11px] font-bold">EJECT / COMPLETE (Accept)</text>
+              </g>
+
+              <!-- S6: LOCKED / TRAP STATE -->
+              <g id="node-S6" transform="translate(130, 390)">
+                <circle r="30" fill="#1e293b" stroke="#ef4444" stroke-width="3" id="circle-S6" />
+                <text y="4" text-anchor="middle" fill="#ef4444" class="font-bold text-xs font-mono">S6</text>
+                <text y="48" text-anchor="middle" fill="#ef4444" class="text-[11px] font-semibold">LOCKED (Trap)</text>
+              </g>
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Sequence Batch Tester -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-md">
+        <h2 class="font-semibold text-slate-200 text-sm mb-2 flex items-center space-x-2">
+          <i class="fa-solid fa-list-check text-sky-400"></i>
+          <span>Automated String Input Tester</span>
+        </h2>
+        <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+          <input type="text" id="sequence-input" placeholder="Enter sequence (e.g., C-P-W-E or C-F-F-F)" 
+            class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-sky-500 uppercase">
+          <div class="flex space-x-2">
+            <button id="btn-step-seq" class="bg-slate-800 hover:bg-slate-700 text-sky-400 px-3 py-2 rounded-lg text-xs font-medium border border-slate-700 transition">
+              <i class="fa-solid fa-forward-step me-1"></i> Step
+            </button>
+            <button id="btn-run-seq" class="bg-sky-600 hover:bg-sky-500 text-slate-950 px-4 py-2 rounded-lg text-xs font-bold transition">
+              <i class="fa-solid fa-play me-1"></i> Run Full
+            </button>
+          </div>
+        </div>
+        <div class="mt-2 flex flex-wrap gap-2 text-xs" id="quick-presets">
+          <span class="text-slate-400">Presets:</span>
+          <button data-seq="C,P,W,E" class="preset-btn bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded border border-slate-700 font-mono text-[10px]">C-P-W-E (Withdraw)</button>
+          <button data-seq="C,P,B,R,D,E" class="preset-btn bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded border border-slate-700 font-mono text-[10px]">C-P-B-R-D-E (Multi-tx)</button>
+          <button data-seq="C,F,F,F" class="preset-btn bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded border border-slate-700 font-mono text-[10px]">C-F-F-F (Lock)</button>
+          <button data-seq="C,E" class="preset-btn bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded border border-slate-700 font-mono text-[10px]">C-E (Cancel)</button>
+        </div>
+        <div id="seq-result" class="mt-3 p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-xs hidden">
+          <!-- Result details output here -->
+        </div>
+      </div>
+
+    </section>
+
+    <!-- RIGHT PANEL: Realistic ATM Simulator & Logs (5 Columns) -->
+    <section class="lg:col-span-5 flex flex-col space-y-4">
+      
+      <!-- ATM Physical Cabinet -->
+      <div class="bg-slate-900 border-2 border-slate-700 rounded-2xl p-4 shadow-2xl flex flex-col space-y-4 relative">
+        
+        <!-- Header Brand -->
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+          <div class="flex items-center space-x-2">
+            <i class="fa-solid fa-vault text-amber-400 text-lg"></i>
+            <span class="font-bold tracking-wider text-slate-200 text-xs uppercase">AUTOMATA BANK ATM</span>
+          </div>
+          <span id="atm-status-badge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
+            OFFLINE
+          </span>
+        </div>
+
+        <!-- ATM Digital Screen -->
+        <div class="bg-sky-950 border-4 border-slate-800 rounded-xl p-4 min-h-[220px] flex flex-col justify-between relative overflow-hidden screen-glow text-sky-100">
+          
+          <!-- Screen Top Info Bar -->
+          <div class="flex justify-between items-center text-[11px] font-mono border-b border-sky-800/60 pb-1.5 text-sky-300">
+            <span>STATE: <strong id="screen-state-code" class="text-amber-400">S0 (IDLE)</strong></span>
+            <span id="screen-time">12:00</span>
+          </div>
+
+          <!-- Main Screen Display Message -->
+          <div id="screen-body" class="my-auto py-2 text-center">
+            <i class="fa-solid fa-credit-card text-3xl text-sky-400 mb-2 animate-bounce"></i>
+            <h3 class="font-bold text-base text-white">WELCOME</h3>
+            <p class="text-xs text-sky-200 mt-1">Please insert your ATM card to begin.</p>
+          </div>
+
+          <!-- On-Screen Soft Key Options (Used during S2/S3) -->
+          <div id="screen-options" class="grid grid-cols-2 gap-2 mt-2 hidden">
+            <button id="opt-withdraw" class="bg-sky-900/80 hover:bg-sky-800 text-xs font-semibold py-1.5 px-2 rounded text-left border border-sky-700 text-sky-100 flex items-center justify-between">
+              <span>1. Withdraw</span> <i class="fa-solid fa-money-bill-wave text-emerald-400"></i>
+            </button>
+            <button id="opt-balance" class="bg-sky-900/80 hover:bg-sky-800 text-xs font-semibold py-1.5 px-2 rounded text-left border border-sky-700 text-sky-100 flex items-center justify-between">
+              <span>2. Balance</span> <i class="fa-solid fa-scale-balanced text-amber-400"></i>
+            </button>
+            <button id="opt-deposit" class="bg-sky-900/80 hover:bg-sky-800 text-xs font-semibold py-1.5 px-2 rounded text-left border border-sky-700 text-sky-100 flex items-center justify-between">
+              <span>3. Deposit</span> <i class="fa-solid fa-piggy-bank text-sky-400"></i>
+            </button>
+            <button id="opt-eject" class="bg-red-950/80 hover:bg-red-900 text-xs font-semibold py-1.5 px-2 rounded text-left border border-red-700 text-red-200 flex items-center justify-between">
+              <span>4. Exit/Eject</span> <i class="fa-solid fa-right-from-bracket text-red-400"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Physical Controls Area (Card Slot, PIN Keypad, Cash Tray) -->
+        <div class="grid grid-cols-12 gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
+          
+          <!-- Keypad (7 Cols) -->
+          <div class="col-span-7 bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+            <div class="text-[10px] font-mono text-slate-400 mb-1.5 text-center">PIN KEYPAD</div>
+            <div class="grid grid-cols-3 gap-1.5">
+              <button class="key-btn bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs py-2 rounded border border-slate-700 active:bg-sky-600">1</button>
+              <button class="key-btn bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs py-2 rounded border border-slate-700 active:bg-sky-600">2</button>
+              <button class="key-btn bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs py-2 rounded border border-slate-700 active:bg-sky-600">3</button>
+              <button class="key-btn bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs py-2 rounded border border-slate-700 active:bg-sky-600">4</button>
+              <button class="key-btn bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs py-2 rounded border border-slate-700 active:bg-sky-600">5</button>
+              <button class="key-btn bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs py-2 rounded border border-slate-700 active:bg-sky-600">6</button>
+              <button class="key-btn bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs py-2 rounded border border-slate-700 active:bg-sky-600">7</button>
+              <button class="key-btn bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs py-2 rounded border border-slate-700 active:bg-sky-600">8</button>
+              <button class="key-btn bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs py-2 rounded border border-slate-700 active:bg-sky-600">9</button>
+              <button id="key-cancel" class="bg-red-900/60 hover:bg-red-800 text-red-200 font-bold text-[10px] py-2 rounded border border-red-800">CANCEL</button>
+              <button class="key-btn bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs py-2 rounded border border-slate-700 active:bg-sky-600">0</button>
+              <button id="key-enter" class="bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 font-bold text-[10px] py-2 rounded border border-emerald-800">ENTER</button>
+            </div>
+            <!-- Quick PIN Helper buttons for visual demo -->
+            <div class="mt-2 pt-2 border-t border-slate-800 flex justify-between text-[10px]">
+              <button id="btn-quick-correct" class="text-emerald-400 hover:underline">Insert Correct PIN (1234)</button>
+              <button id="btn-quick-wrong" class="text-red-400 hover:underline">Wrong PIN</button>
+            </div>
+          </div>
+
+          <!-- Card Slot & Cash Slot (5 Cols) -->
+          <div class="col-span-5 flex flex-col justify-between space-y-2">
+            
+            <!-- Card Slot -->
+            <div class="bg-slate-900 p-2 rounded-lg border border-slate-800 text-center">
+              <span class="text-[10px] font-mono text-slate-400 block mb-1">CARD SLOT [C]</span>
+              <button id="btn-card-slot" class="w-full bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold py-2 rounded text-xs transition flex items-center justify-center space-x-1 shadow">
+                <i class="fa-solid fa-credit-card"></i>
+                <span id="card-btn-text">Insert Card</span>
+              </button>
+            </div>
+
+            <!-- Cash Tray Output -->
+            <div class="bg-slate-900 p-2 rounded-lg border border-slate-800 text-center flex-1 flex flex-col justify-between">
+              <span class="text-[10px] font-mono text-slate-400 block">CASH / RECEIPT TRAY</span>
+              <div id="cash-tray" class="bg-slate-950 border border-slate-800 rounded h-10 flex items-center justify-center text-xs text-slate-600 font-mono my-1">
+                [ Empty Tray ]
+              </div>
+              <button id="btn-collect-cash" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] py-1 rounded border border-slate-700 disabled:opacity-50" disabled>
+                Collect Items
+              </button>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Execution Log & Transition History -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex-1 flex flex-col min-h-[160px] shadow-md">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="font-semibold text-slate-200 text-sm flex items-center space-x-2">
+            <i class="fa-solid fa-clock-rotate-left text-sky-400"></i>
+            <span>DFA Execution Log</span>
+          </h3>
+          <button id="clear-logs-btn" class="text-[10px] text-slate-400 hover:text-slate-200 underline">Clear Log</button>
+        </div>
+        <div id="log-container" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg p-2.5 font-mono text-[11px] overflow-y-auto max-h-[180px] space-y-1">
+          <div class="text-slate-500">[System Ready] Initialized at State S0 (IDLE).</div>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-slate-900 border-t border-slate-800 px-6 py-2.5 text-center text-xs text-slate-500 flex flex-col sm:flex-row justify-between items-center">
+    <span>Automata Theory ATM FSM Simulator &bull; Language: $\Sigma^*$</span>
+    <span>States: $Q=\{S_0, S_1, S_2, S_3, S_4, S_5, S_6\}$, $F=\{S_5\}$</span>
+  </footer>
+
+  <!-- Application Logic -->
+  <script>
+    // --- DFA DEFINITION & MACHINE STATE ---
+    const DFA = {
+      states: {
+        S0: { name: "IDLE", isAccept: false, isTrap: false },
+        S1: { name: "CARD_INSERTED", isAccept: false, isTrap: false },
+        S2: { name: "PIN_VERIFIED", isAccept: false, isTrap: false },
+        S3: { name: "TX_SELECTED", isAccept: false, isTrap: false },
+        S4: { name: "PROCESSING", isAccept: false, isTrap: false },
+        S5: { name: "EJECT_SUCCESS", isAccept: true, isTrap: false },
+        S6: { name: "ACCOUNT_LOCKED", isAccept: false, isTrap: true }
+      },
+      // Alphabet: C (Card), P (Valid PIN), F (Failed PIN), W (Withdraw), D (Deposit), B (Balance), E (Eject/Cancel), R (Return), A (Auto Reset)
+      transitions: {
+        S0: { 'C': 'S1' },
+        S1: { 'P': 'S2', 'F': 'S6', 'E': 'S5' },
+        S2: { 'W': 'S3', 'D': 'S3', 'B': 'S3', 'E': 'S5' },
+        S3: { 'F': 'S4', 'E': 'S5' }, // F here mapped as Finish/Process
+        S4: { 'R': 'S2', 'E': 'S5' },
+        S5: { 'A': 'S0' },
+        S6: {} // Trap state
+      }
+    };
+
+    let currentState = 'S0';
+    let failedPinCount = 0;
+    let enteredPin = '';
+    const VALID_PIN = '1234';
+    let isCardInserted = false;
+
+    // --- DOM ELEMENTS ---
+    const screenStateCode = document.getElementById('screen-state-code');
+    const screenBody = document.getElementById('screen-body');
+    const screenOptions = document.getElementById('screen-options');
+    const screenTime = document.getElementById('screen-time');
+    const atmStatusBadge = document.getElementById('atm-status-badge');
+    const logContainer = document.getElementById('log-container');
+    const btnCardSlot = document.getElementById('btn-card-slot');
+    const cardBtnText = document.getElementById('card-btn-text');
+    const cashTray = document.getElementById('cash-tray');
+    const btnCollectCash = document.getElementById('btn-collect-cash');
+    const sequenceInput = document.getElementById('sequence-input');
+    const seqResult = document.getElementById('seq-result');
+
+    // --- TIME DISPLAY ---
+    function updateClock() {
+      const now = new Date();
+      screenTime.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // --- DFA STATE TRANSITION ENGINE ---
+    function transition(symbol, description = "") {
+      const nextState = DFA.transitions[currentState]?.[symbol];
+
+      if (!nextState) {
+        addLog(`[REJECTED] Input '${symbol}' invalid in state ${currentState} (${DFA.states[currentState].name})`, 'text-red-400');
+        return false;
+      }
+
+      const prevState = currentState;
+      currentState = nextState;
+
+      addLog(`Transition: ${prevState} --(${symbol})--> ${currentState} ${description ? `[${description}]` : ''}`, 'text-sky-300');
+      
+      updateUI();
+      return true;
+    }
+
+    // --- LOGGING UTILITY ---
+    function addLog(msg, colorClass = 'text-slate-300') {
+      const div = document.createElement('div');
+      div.className = `${colorClass} py-0.5 border-b border-slate-900`;
+      div.innerHTML = `<span class="text-slate-600">[${new Date().toLocaleTimeString()}]</span> ${msg}`;
+      logContainer.appendChild(div);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    // --- VISUAL NODE HIGHLIGHTING (SVG) ---
+    function updateSVGDiagram() {
+      // Reset all node circle styles
+      Object.keys(DFA.states).forEach(st => {
+        const circle = document.getElementById(`circle-${st}`);
+        if (circle) {
+          if (st === 'S5') {
+            circle.setAttribute('stroke', '#10b981');
+            circle.setAttribute('fill', '#1e293b');
+          } else if (st === 'S6') {
+            circle.setAttribute('stroke', '#ef4444');
+            circle.setAttribute('fill', '#1e293b');
+          } else {
+            circle.setAttribute('stroke', '#475569');
+            circle.setAttribute('fill', '#1e293b');
+          }
+          circle.removeAttribute('filter');
+        }
+      });
+
+      // Highlight Active State Node
+      const activeCircle = document.getElementById(`circle-${currentState}`);
+      if (activeCircle) {
+        activeCircle.setAttribute('fill', '#0284c7');
+        activeCircle.setAttribute('stroke', '#38bdf8');
+        activeCircle.setAttribute('filter', 'url(#glow)');
+      }
+    }
+
+    // --- ATM SCREEN & HARDWARE UI UPDATES ---
+    function updateUI() {
+      // 1. Update Graph
+      updateSVGDiagram();
+
+      // 2. Update Header / Screen State Code
+      const stInfo = DFA.states[currentState];
+      screenStateCode.textContent = `${currentState} (${stInfo.name})`;
+
+      // 3. Status Badge
+      if (stInfo.isAccept) {
+        atmStatusBadge.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-700 animate-pulse";
+        atmStatusBadge.textContent = "SUCCESS / ACCEPT";
+      } else if (stInfo.isTrap) {
+        atmStatusBadge.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-red-950 text-red-400 border border-red-700";
+        atmStatusBadge.textContent = "LOCKED / TRAP";
+      } else {
+        atmStatusBadge.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-sky-950 text-sky-400 border border-sky-700";
+        atmStatusBadge.textContent = "ACTIVE";
+      }
+
+      // 4. Update Screen Body Content according to State
+      screenOptions.classList.add('hidden');
+      
+      switch (currentState) {
+        case 'S0': // IDLE
+          isCardInserted = false;
+          btnCardSlot.className = "w-full bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold py-2 rounded text-xs transition flex items-center justify-center space-x-1 shadow";
+          cardBtnText.textContent = "Insert Card";
+          screenBody.innerHTML = `
+            <i class="fa-solid fa-credit-card text-3xl text-sky-400 mb-2 animate-bounce"></i>
+            <h3 class="font-bold text-base text-white">WELCOME</h3>
+            <p class="text-xs text-sky-200 mt-1">Please insert your ATM card to begin.</p>
+          `;
+          break;
+
+        case 'S1': // CARD INSERTED (PIN ENTRY)
+          isCardInserted = true;
+          btnCardSlot.className = "w-full bg-red-600 hover:bg-red-500 text-white font-bold py-2 rounded text-xs transition flex items-center justify-center space-x-1 shadow";
+          cardBtnText.textContent = "Cancel / Eject";
+          screenBody.innerHTML = `
+            <i class="fa-solid fa-lock text-2xl text-amber-400 mb-1"></i>
+            <h3 class="font-bold text-sm text-white">ENTER PIN CODE</h3>
+            <div class="my-2 bg-sky-900/60 py-1 px-4 rounded-lg inline-block border border-sky-700 tracking-widest text-lg font-mono text-amber-300">
+              ${'*'.repeat(enteredPin.length) || '<span class="text-xs text-sky-400 opacity-60">Enter 4 digits</span>'}
+            </div>
+            <p class="text-[11px] text-sky-300">Attempts Remaining: <span class="font-bold text-amber-400">${3 - failedPinCount}</span></p>
+          `;
+          break;
+
+        case 'S2': // PIN VERIFIED (MAIN MENU)
+          screenBody.innerHTML = `
+            <h3 class="font-bold text-sm text-white mb-1">MAIN MENU</h3>
+            <p class="text-xs text-sky-200 mb-2">Select a transaction option below:</p>
+          `;
+          screenOptions.classList.remove('hidden');
+          break;
+
+        case 'S3': // TRANSACTION SELECTED
+          screenBody.innerHTML = `
+            <i class="fa-solid fa-gears text-2xl text-sky-400 mb-1 animate-spin"></i>
+            <h3 class="font-bold text-sm text-white">PROCESSING OPTION</h3>
+            <p class="text-xs text-sky-200 mt-1">Press ENTER on keypad to confirm transaction.</p>
+          `;
+          break;
+
+        case 'S4': // DISPENSING / COMPLETING
+          cashTray.innerHTML = `<span class="text-emerald-400 font-bold flex items-center justify-center space-x-1"><i class="fa-solid fa-money-bill-wave"></i> <span>$100 Cash / Receipt</span></span>`;
+          btnCollectCash.disabled = false;
+          btnCollectCash.className = "w-full bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-[10px] py-1 rounded transition shadow";
+          
+          screenBody.innerHTML = `
+            <i class="fa-solid fa-circle-check text-3xl text-emerald-400 mb-1"></i>
+            <h3 class="font-bold text-sm text-white">TRANSACTION COMPLETE</h3>
+            <p class="text-xs text-sky-200 mt-1">Please take your cash/receipt.</p>
+          `;
+          break;
+
+        case 'S5': // EJECT / SUCCESS (ACCEPTING STATE)
+          btnCardSlot.className = "w-full bg-slate-800 text-slate-500 font-bold py-2 rounded text-xs opacity-50 cursor-not-allowed";
+          cardBtnText.textContent = "Card Ejected";
+          screenBody.innerHTML = `
+            <i class="fa-solid fa-hand-holding-dollar text-3xl text-emerald-400 mb-1"></i>
+            <h3 class="font-bold text-sm text-emerald-300">THANK YOU</h3>
+            <p class="text-xs text-sky-200 mt-1">Card Ejected. Have a great day!</p>
+          `;
+          // Auto reset to S0 after 3 seconds if in interactive mode
+          setTimeout(() => {
+            if (currentState === 'S5') {
+              transition('A', 'Auto Reset to IDLE');
+            }
+          }, 3500);
+          break;
+
+        case 'S6': // LOCKED / TRAP STATE
+          btnCardSlot.className = "w-full bg-red-950 text-red-500 font-bold py-2 rounded text-xs border border-red-800";
+          cardBtnText.textContent = "Card Retained";
+          screenBody.innerHTML = `
+            <i class="fa-solid fa-triangle-exclamation text-3xl text-red-500 mb-1"></i>
+            <h3 class="font-bold text-sm text-red-400">CARD RETAINED / LOCKED</h3>
+            <p class="text-[11px] text-slate-300 mt-1">Too many incorrect PIN attempts. Contact bank security.</p>
+          `;
+          break;
+      }
+    }
+
+    // --- HARDWARE INTERACTION EVENT LISTENERS ---
+
+    // Card Slot Click
+    btnCardSlot.addEventListener('click', () => {
+      if (currentState === 'S0') {
+        transition('C', 'Card Inserted');
+      } else if (currentState === 'S1' || currentState === 'S2' || currentState === 'S4') {
+        transition('E', 'Card Cancelled/Ejected');
+      }
+    });
+
+    // Keypad Digit Buttons
+    document.querySelectorAll('.key-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        if (currentState !== 'S1') return;
+        const val = e.target.textContent.trim();
+        if (enteredPin.length < 4) {
+          enteredPin += val;
+          updateUI();
+        }
+      });
+    });
+
+    // Keypad Cancel
+    document.getElementById('key-cancel').addEventListener('click', () => {
+      if (currentState === 'S1') {
+        enteredPin = '';
+        transition('E', 'PIN Cancelled');
+      } else if (currentState === 'S2' || currentState === 'S3' || currentState === 'S4') {
+        transition('E', 'Transaction Cancelled');
+      }
+    });
+
+    // Keypad Enter (PIN Verification or Transaction Confirmation)
+    document.getElementById('key-enter').addEventListener('click', () => {
+      if (currentState === 'S1') {
+        if (enteredPin === VALID_PIN) {
+          enteredPin = '';
+          failedPinCount = 0;
+          transition('P', 'Valid PIN Correct');
+        } else {
+          enteredPin = '';
+          failedPinCount++;
+          addLog(`[SECURITY] Invalid PIN entered. Attempt ${failedPinCount}/3`, 'text-amber-400');
+          if (failedPinCount >= 3) {
+            transition('F', '3 Failed PIN Attempts');
+          } else {
+            updateUI();
+          }
+        }
+      } else if (currentState === 'S3') {
+        transition('F', 'Confirm & Dispense');
+      }
+    });
+
+    // Quick PIN Demo Helpers
+    document.getElementById('btn-quick-correct').addEventListener('click', () => {
+      if (currentState !== 'S1') {
+        if (currentState === 'S0') transition('C', 'Auto Card Insert');
+      }
+      enteredPin = '1234';
+      updateUI();
+    });
+
+    document.getElementById('btn-quick-wrong').addEventListener('click', () => {
+      if (currentState !== 'S1') {
+        if (currentState === 'S0') transition('C', 'Auto Card Insert');
+      }
+      enteredPin = '9999';
+      updateUI();
+    });
+
+    // On-Screen Option Buttons (S2 Menu)
+    document.getElementById('opt-withdraw').addEventListener('click', () => {
+      if (currentState === 'S2') transition('W', 'Withdraw Selected');
+    });
+    document.getElementById('opt-balance').addEventListener('click', () => {
+      if (currentState === 'S2') transition('B', 'Balance Check Selected');
+    });
+    document.getElementById('opt-deposit').addEventListener('click', () => {
+      if (currentState === 'S2') transition('D', 'Deposit Selected');
+    });
+    document.getElementById('opt-eject').addEventListener('click', () => {
+      if (currentState === 'S2' || currentState === 'S4') transition('E', 'Eject Requested');
+    });
+
+    // Collect Cash Button
+    btnCollectCash.addEventListener('click', () => {
+      cashTray.innerHTML = `[ Empty Tray ]`;
+      cashTray.className = "bg-slate-950 border border-slate-800 rounded h-10 flex items-center justify-center text-xs text-slate-600 font-mono my-1";
+      btnCollectCash.disabled = true;
+      btnCollectCash.className = "w-full bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] py-1 rounded border border-slate-700 disabled:opacity-50";
+      
+      if (currentState === 'S4') {
+        transition('E', 'Items Collected -> Eject');
+      }
+    });
+
+    // Reset All Machine Button
+    document.getElementById('reset-all-btn').addEventListener('click', () => {
+      currentState = 'S0';
+      failedPinCount = 0;
+      enteredPin = '';
+      cashTray.innerHTML = `[ Empty Tray ]`;
+      btnCollectCash.disabled = true;
+      seqResult.classList.add('hidden');
+      addLog('[RESET] Machine manually reset to State S0 (IDLE).', 'text-amber-400');
+      updateUI();
+    });
+
+    // Clear Logs
+    document.getElementById('clear-logs-btn').addEventListener('click', () => {
+      logContainer.innerHTML = '<div class="text-slate-500">[System Ready] Log cleared.</div>';
+    });
+
+    // --- SEQUENCE BATCH TESTER ENGINE ---
+    let sequenceQueue = [];
+    let isSteppingSeq = false;
+
+    function parseSequence(rawStr) {
+      return rawStr.toUpperCase().replace(/[^A-Z]/g, '').split('');
+    }
+
+    // Step Execution
+    document.getElementById('btn-step-seq').addEventListener('click', () => {
+      const rawInput = sequenceInput.value.trim();
+      if (!rawInput) return;
+
+      if (!isSteppingSeq || sequenceQueue.length === 0) {
+        sequenceQueue = parseSequence(rawInput);
+        isSteppingSeq = true;
+        // Reset state to start testing sequence clean
+        currentState = 'S0';
+        failedPinCount = 0;
+        updateUI();
+        addLog(`--- Started Step Test for Sequence: [${sequenceQueue.join(', ')}] ---`, 'text-amber-400');
+      }
+
+      if (sequenceQueue.length > 0) {
+        const symbol = sequenceQueue.shift();
+        const success = transition(symbol, `Step Test '${symbol}'`);
+        
+        seqResult.classList.remove('hidden');
+        if (!success) {
+          seqResult.className = "mt-3 p-2.5 rounded-lg bg-red-950/80 border border-red-800 text-xs text-red-200";
+          seqResult.innerHTML = `<i class="fa-solid fa-circle-xmark me-1 text-red-400"></i> <strong>INVALID SYMBOL:</strong> '${symbol}' cannot be processed in current state. Remaining queue cleared.`;
+          sequenceQueue = [];
+          isSteppingSeq = false;
+        } else {
+          const isAccept = DFA.states[currentState].isAccept;
+          seqResult.className = `mt-3 p-2.5 rounded-lg border text-xs ${isAccept ? 'bg-emerald-950/80 border-emerald-800 text-emerald-200' : 'bg-slate-950 border-slate-800 text-slate-300'}`;
+          seqResult.innerHTML = `Current Symbol: <strong>${symbol}</strong> | Current State: <strong>${currentState}</strong> | Status: ${isAccept ? '<span class="text-emerald-400 font-bold">ACCEPTING STATE</span>' : 'Processing...'}`;
+        }
+      } else {
+        isSteppingSeq = false;
+      }
+    });
+
+    // Full Batch Execution
+    document.getElementById('btn-run-seq').addEventListener('click', () => {
+      const rawInput = sequenceInput.value.trim();
+      if (!rawInput) return;
+
+      const symbols = parseSequence(rawInput);
+      currentState = 'S0';
+      failedPinCount = 0;
+      updateUI();
+
+      addLog(`--- Running Batch Sequence: [${symbols.join(', ')}] ---`, 'text-sky-400');
+      
+      let validSequence = true;
+      let stepCount = 0;
+
+      for (let sym of symbols) {
+        stepCount++;
+        const res = transition(sym, `Batch Step ${stepCount}`);
+        if (!res) {
+          validSequence = false;
+          break;
+        }
+      }
+
+      const isFinalAccept = DFA.states[currentState].isAccept;
+
+      seqResult.classList.remove('hidden');
+      if (!validSequence) {
+        seqResult.className = "mt-3 p-2.5 rounded-lg bg-red-950/80 border border-red-800 text-xs text-red-200";
+        seqResult.innerHTML = `<i class="fa-solid fa-circle-xmark me-1 text-red-400"></i> <strong>SEQUENCE REJECTED:</strong> Machine encountered invalid transition during execution.`;
+      } else if (isFinalAccept) {
+        seqResult.className = "mt-3 p-2.5 rounded-lg bg-emerald-950/80 border border-emerald-800 text-xs text-emerald-200";
+        seqResult.innerHTML = `<i class="fa-solid fa-circle-check me-1 text-emerald-400"></i> <strong>SEQUENCE ACCEPTED:</strong> Ended in Accepting State <strong>${currentState} (${DFA.states[currentState].name})</strong>.`;
+      } else {
+        seqResult.className = "mt-3 p-2.5 rounded-lg bg-amber-950/80 border border-amber-800 text-xs text-amber-200";
+        seqResult.innerHTML = `<i class="fa-solid fa-circle-info me-1 text-amber-400"></i> <strong>INCOMPLETE / NON-ACCEPTING:</strong> Ended in State <strong>${currentState}</strong> (Not an accepting state).`;
+      }
+    });
+
+    // Presets Click Event
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const seq = e.target.getAttribute('data-seq');
+        sequenceInput.value = seq;
+      });
+    });
+
+    // Initialize UI on load
+    updateUI();
+  </script>
+</body>
+</html>
